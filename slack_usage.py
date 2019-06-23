@@ -53,6 +53,30 @@ def task_fail_slack_alert(context):
         dag=dag)
     return failed_alert.execute(context=context)
 
+def sla_miss_slack_alert(context):
+    slack_webhook_token = BaseHook.get_connection(SLACK_CONN_ID).password
+    slack_msg = """
+            :yellow_circle: SLA Missed. 
+            *Task*: {task}  
+            *Dag*: {dag} 
+            *Execution Time*: {exec_date}  
+            *Log Url*: {log_url} 
+            """.format(
+            task=context.get('task_instance').task_id,
+            dag=context.get('task_instance').dag_id,
+            ti=context.get('task_instance'),
+            exec_date=context.get('execution_date'),
+            log_url=context.get('task_instance').log_url,
+        )
+    failed_alert = SlackWebhookOperator(
+        task_id='slack_test',
+        http_conn_id='slack',
+        webhook_token=slack_webhook_token,
+        message=slack_msg,
+        username='airflow',
+        dag=dag)
+    return failed_alert.execute(context=context)
+
 
 default_args = {
     'owner': 'airflow',
@@ -69,12 +93,12 @@ default_args = {
     # 'end_date': datetime(2016, 1, 1),
     # 'wait_for_downstream': False,
     # 'dag': dag,
-    # 'sla': timedelta(hours=2),
+    'sla': timedelta(seconds=1),
     # 'execution_timeout': timedelta(seconds=300),
-    # 'on_failure_callback': some_function,
+    'on_failure_callback': task_fail_slack_alert,
     # 'on_success_callback': some_other_function,
     # 'on_retry_callback': another_function,
-    # 'sla_miss_callback': yet_another_function,
+    'sla_miss_callback': sla_miss_slack_alert,
     # 'trigger_rule': 'all_success'
     'bigquery_conn_id': 'gcp-bigquery-connection',
     'write_disposition': 'WRITE_EMPTY',
@@ -83,7 +107,6 @@ default_args = {
     'params': {
         'my_param': 'This is 2nd class default param',
     },
-    'on_failure_callback': task_fail_slack_alert,
 }
 
 params = {
